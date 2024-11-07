@@ -32,11 +32,18 @@ Esto es en lo que se fijarán los revisores al examinar tu proyecto:
 ¿Mantuviste el código limpio?
 '''
 
-# Importar librerías
+'''
+Paso 1: Preparación de los datos
+Carga y remuestreo de datos a intervalos de una hora.
+Conversión de la columna datetime a formato de fecha y hora (si es necesario).
+'''
 
+
+# Importar librerías
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+
 
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
@@ -45,82 +52,123 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error
 
 
-'''
-Paso 1: Cargar los datos y remuestrear a intervalos de una hora
-'''
-
-
 # Cargar los datos
-file_path = '/datasets/taxi.csv'
+file_path = 'datasets/taxi.csv'
 data = pd.read_csv(file_path, parse_dates=['datetime'])
 
 
-# Remuestrear los datos para que estén en intervalos de una hora
+# Remuestrear los datos en intervalos de una hora
 data = data.set_index('datetime').resample('H').sum().reset_index()
 
 
-# Revisar los primeros registros para verificar el cambio
+# Verificar los primeros registros después del remuestreo
 print(data.head())
 
 
 '''
 Paso 2: Análisis exploratorio de los datos
+Revisión estadística básica de num_orders para entender el comportamiento de la demanda.
+Visualización para observar patrones en la demanda horaria.
 '''
 
 
-# Resumen de los datos
-print(data.describe())
+# Resumen estadístico
+print(data['num_orders'].describe())
 
 
-# Distribución de pedidos por hora
-plt.figure(figsize=(10, 5))
+# Visualizar la demanda a lo largo del tiempo
+plt.figure(figsize=(12, 6))
 plt.plot(data['datetime'], data['num_orders'])
-plt.title('Distribución de pedidos de taxis a lo largo del tiempo')
+plt.title('Número de Pedidos de Taxis por Hora')
 plt.xlabel('Fecha')
-plt.ylabel('Número de pedidos')
+plt.ylabel('Número de Pedidos')
 plt.show()
 
 
 '''
-Paso 3: Separar el conjunto de datos en entrenamiento y prueba
+Paso 3: Preparación de características (Feature Engineering)
+Extraer características temporales como la hora y el día de la semana, ya que pueden ser útiles para la predicción.
+Dividir en características (X) y objetivo (y).
 '''
 
-# Dividir los datos en características (X) y objetivo (y)
-X = data[['datetime']]
+
+# Extraer características temporales
+data['hour'] = data['datetime'].dt.hour
+data['day_of_week'] = data['datetime'].dt.dayofweek
+
+
+# Definir las características (X) y el objetivo (y)
+X = data[['hour', 'day_of_week']]
 y = data['num_orders']
 
 
-# Convertir la característica 'datetime' en una característica más útil, como la hora
-X['hour'] = X['datetime'].dt.hour
-X = X[['hour']]  # Solo la hora como característica
+'''
+Paso 4: Separar los datos en conjuntos de entrenamiento y prueba
+Separar el conjunto de datos en entrenamiento y prueba (90% - 10%).
+'''
 
 
-# Separar los datos en entrenamiento y prueba (90% - 10%)
+# División de los datos en entrenamiento y prueba
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
 
 
 '''
-Paso 4: Entrenar modelos con diferentes hiperparámetros
+Paso 5: Entrenar modelos con diferentes hiperparámetros
+Se probarán varios modelos y ajustaremos sus hiperparámetros. Estos incluyen:
+
+Regresión Lineal
+Árbol de Decisión
+Random Forest
+
+Para cada modelo, se calculará el RMSE y se verificará si cumple con el requisito (<48).
 '''
 
 
+# Función para calcular el RMSE
+def calculate_rmse(model, X_train, y_train, X_test, y_test):
+    model.fit(X_train, y_train)
+    predictions = model.predict(X_test)
+    rmse = np.sqrt(mean_squared_error(y_test, predictions))
+    return rmse
+
 # Modelo de regresión lineal
 lr_model = LinearRegression()
-lr_model.fit(X_train, y_train)
-lr_predictions = lr_model.predict(X_test)
-lr_rmse = np.sqrt(mean_squared_error(y_test, lr_predictions))
+lr_rmse = calculate_rmse(lr_model, X_train, y_train, X_test, y_test)
 print(f'Regresión Lineal RMSE: {lr_rmse:.2f}')
 
 # Modelo de árbol de decisión
-dt_model = DecisionTreeRegressor(random_state=42)
-dt_model.fit(X_train, y_train)
-dt_predictions = dt_model.predict(X_test)
-dt_rmse = np.sqrt(mean_squared_error(y_test, dt_predictions))
+dt_model = DecisionTreeRegressor(random_state=42, max_depth=10)
+dt_rmse = calculate_rmse(dt_model, X_train, y_train, X_test, y_test)
 print(f'Árbol de Decisión RMSE: {dt_rmse:.2f}')
 
 # Modelo Random Forest
-rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
-rf_model.fit(X_train, y_train)
-rf_predictions = rf_model.predict(X_test)
-rf_rmse = np.sqrt(mean_squared_error(y_test, rf_predictions))
-print(f'Random Forest RMSE: {rf_rmse:.2f}') 
+rf_model = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42)
+rf_rmse = calculate_rmse(rf_model, X_train, y_train, X_test, y_test)
+print(f'Random Forest RMSE: {rf_rmse:.2f}')
+
+
+'''
+Paso 6: Prueba y Conclusiones
+
+Revisión de los RMSE de cada modelo:
+
+Regresión Lineal: RMSE = 44.47
+Árbol de Decisión: RMSE = 34.54
+Random Forest: RMSE = 34.56
+
+Todos los modelos cumplen con el requisito del proyecto, ya que sus RMSE son inferiores al umbral de 48.
+
+Regresión Lineal: Aunque la regresión lineal logró un RMSE aceptable (44.47), es el modelo con peor rendimiento entre los tres.
+
+Árbol de Decisión y Random Forest: Ambos modelos basados en árboles presentan RMSE muy similares y bajos (34.54 para el Árbol de Decisión 
+y 34.56 para el Random Forest).
+
+Esto indica que las relaciones en los datos pueden no ser puramente lineales, lo que limita la capacidad predictiva del modelo de regresión 
+lineal en comparación con los modelos basados en árboles.
+
+Modelo Seleccionado: Dado que el Árbol de Decisión presenta un RMSE ligeramente menor y es más simple de interpretar y optimizar en comparación 
+con el Random Forest, este modelo podría ser una opción adecuada si se busca simplicidad.
+
+Con un RMSE de aproximadamente 34, el modelo puede predecir con una precisión aceptable el número de pedidos de taxis en la próxima hora, 
+cumpliendo con el objetivo del proyecto y permitiendo a la empresa tomar decisiones informadas para atraer a más conductores durante horas pico.
+'''
